@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Exception = System.Exception;
@@ -16,7 +17,7 @@ namespace TCPServer
         public Server()
         {
             InitializeComponent();
-            RichTextBox.CheckForIllegalCrossThreadCalls = false;
+            //RichTextBox.CheckForIllegalCrossThreadCalls = false;
         }
 
         private Task _watchTask = null;
@@ -36,6 +37,8 @@ namespace TCPServer
         private StringBuffer _receiveContent = new StringBuffer();
 
         private delegate void SendDelegate(string text);
+
+       
 
         /// <summary>
         /// 启动服务
@@ -67,9 +70,11 @@ namespace TCPServer
             }
             _watchSocket.Listen(10);
             Send_Button.Enabled = true;
+           
             _watchTask = new Task(Listen);
             _watchTask.Start();   
             ShowMessage("启动服务器成功\r\n");
+            
         }
 
         //private void Watch()

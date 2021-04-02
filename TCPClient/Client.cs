@@ -14,7 +14,7 @@ namespace TCPClient
         public Client()
         {
             InitializeComponent();
-            RichTextBox.CheckForIllegalCrossThreadCalls = false;
+            //RichTextBox.CheckForIllegalCrossThreadCalls = false;
         }
 
 
@@ -29,6 +29,14 @@ namespace TCPClient
         private delegate void SendDelegate(string text);
 
         private delegate void ReceiveDelegate();
+
+        private CancellationToken _listentCancellationToken;
+
+        private CancellationTokenSource _listenCancellationTokenSource = new CancellationTokenSource();
+
+        private CancellationToken _sendCancellationToken;
+
+        private CancellationTokenSource _sendCancellationTokenSource = new CancellationTokenSource();
 
         /// <summary>
         /// 连接服务器
@@ -64,10 +72,11 @@ namespace TCPClient
             _isSussessConnected = true;
             LinkServer_Button.Enabled = false;
             Send_Button.Enabled = true;
+            _listentCancellationToken = _listenCancellationTokenSource.Token;
             Task.Run(() =>
             {
                 ReceiveMessage();
-            });
+            },_listentCancellationToken);
             ShowMessage("连接服务器成功" + "\r\n");
             //Receive();
         }
@@ -90,10 +99,11 @@ namespace TCPClient
                 return;
             }
             string message = $"client:\r\n-->   {Send_RichTextBox.Text}\r\n";
+            _sendCancellationToken = _sendCancellationTokenSource.Token;
             Task.Run(() =>
             {
                 SendMessage(message);
-            });
+            },_sendCancellationToken);
         }
 
         /// <summary>
@@ -102,6 +112,10 @@ namespace TCPClient
         /// <param name="message"></param>
         private void SendMessage(string message)
         {
+            if(_sendCancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
             byte[] data = Encoding.UTF8.GetBytes(message);
             try
             {
@@ -123,12 +137,24 @@ namespace TCPClient
         }
 
         /// <summary>
+        /// 取消发送任务
+        /// </summary>
+        private void StopSendTask()
+        {
+            _sendCancellationTokenSource.Cancel();
+        }
+
+        /// <summary>
         /// 接收消息
         /// </summary>
         private void ReceiveMessage()
         {
             while(!_isStop)
             {
+                if(_listentCancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
                 byte[] data = new byte[1024 * 1024 * 2];
                 int length = -1;
                 try
@@ -150,7 +176,10 @@ namespace TCPClient
             }
         }
 
-
+        private void StopListenTask()
+        {
+            _listenCancellationTokenSource.Cancel();
+        }
 
         private void ShowMessage(string message)
         {
@@ -167,6 +196,12 @@ namespace TCPClient
                 _clientSockect.Close();
             }
             _clientSockect?.Dispose();
+        }
+
+        ~Client()
+        {
+            StopListenTask();
+            StopSendTask();
         }
 
         private void Client_Load(object sender, EventArgs e)
