@@ -17,6 +17,7 @@ namespace TCPClient
             RichTextBox.CheckForIllegalCrossThreadCalls = false;
         }
 
+
         private StringBuffer _receiveContent =new StringBuffer();
 
         private Socket _clientSockect;
