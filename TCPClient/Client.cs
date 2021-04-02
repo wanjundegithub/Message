@@ -149,6 +149,8 @@ namespace TCPClient
             }
         }
 
+
+
         private void ShowMessage(string message)
         {
             _receiveContent.append(message);
