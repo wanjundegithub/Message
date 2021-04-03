@@ -17,14 +17,11 @@ namespace TCPServer
         public Server()
         {
             InitializeComponent();
-            //RichTextBox.CheckForIllegalCrossThreadCalls = false;
         }
-
-        private Task _watchTask = null;
 
         private Socket _watchSocket = null;
 
-        private delegate void WatchDelegate();
+        private delegate Task WatchDelegate();
 
         private bool _isStop = false;
 
@@ -32,13 +29,15 @@ namespace TCPServer
 
         private Dictionary<string, Task> _ipTaskDics = new Dictionary<string, Task>();
 
-        private delegate void listenDelegate(Socket socket);
+        private delegate Task listenDelegate(Socket socket);
 
         private StringBuffer _receiveContent = new StringBuffer();
 
         private delegate void SendDelegate(string text);
 
-       
+        private CancellationToken _listentCancellationToken;
+
+        private CancellationTokenSource _listenCancellationTokenSource = new CancellationTokenSource();
 
         /// <summary>
         /// 启动服务
@@ -62,7 +61,7 @@ namespace TCPServer
             _watchSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             try
             {
-                _watchSocket.Bind(iPEndPoint);
+                 _watchSocket.Bind(iPEndPoint);
             }
             catch(SocketException se)
             {
@@ -70,85 +69,86 @@ namespace TCPServer
             }
             _watchSocket.Listen(10);
             Send_Button.Enabled = true;
-           
-            _watchTask = new Task(Listen);
-            _watchTask.Start();   
+            _listentCancellationToken = _listenCancellationTokenSource.Token;
+            Task.Run(()=>
+            {
+                Listen();
+            },_listentCancellationToken);
             ShowMessage("启动服务器成功\r\n");
-            
+            StartServer_Button.Enabled = false;
         }
 
-        //private void Watch()
-        //{
-        //    if (IPCollection_listBox.InvokeRequired)
-        //    {
-        //        var d = new WatchDelegate(Listen);
-        //        IPCollection_listBox.Invoke(d);
-        //        return;
-        //    }
-        //    if (Receive_RichTextBox.InvokeRequired)
-        //    {
-        //        var d = new WatchDelegate(Listen);
-        //        Receive_RichTextBox.Invoke(d);
-        //        return;
-        //    }          
-        //    Listen();
+        private async Task Listen()
+        {
+            if(IPCollection_listBox.InvokeRequired)
+            {
+                var d = new WatchDelegate(WatchTask);
+                IPCollection_listBox.BeginInvoke(d);
+            }
+            else
+            {
+                await WatchTask();
+            }
+        }
 
-        //}
-
-        private void Listen()
+        private  async Task WatchTask()
         {
             while(!_isStop)
             {
-                Socket acceptSockect = _watchSocket.Accept();
+                //acceppt方法阻塞
+                Socket acceptSockect =await _watchSocket.AcceptAsync();
                 if(_ipSocketDics.ContainsKey(acceptSockect.RemoteEndPoint.ToString()))
                 {
                     continue;
                 }
                 IPCollection_listBox.Items.Add(acceptSockect.RemoteEndPoint.ToString());
                 _ipSocketDics.Add(acceptSockect.RemoteEndPoint.ToString(), acceptSockect);
-                Task task = new Task(() =>
-                 {
-                     ReceiveMessage(acceptSockect);
-                 });
+                 Task task =  new Task(async() =>
+                  {
+                      await Receive(acceptSockect);
+                  });
                 task.Start();
                 _ipTaskDics.Add(acceptSockect.RemoteEndPoint.ToString(), task);
             }
         }
 
-        //private void Receive(Socket connection)
-        //{
-        //    if (Receive_RichTextBox.InvokeRequired)
-        //    {
-        //        var d = new listenDelegate(ReceiveMessage);
-        //        Receive_RichTextBox.Invoke(d, connection);
-        //        return;
-        //    }
-        //    if (IPCollection_listBox.InvokeRequired)
-        //    {
-        //        var d = new listenDelegate(ReceiveMessage);
-        //        IPCollection_listBox.Invoke(d, connection);
-        //        return;
-        //    }
-        //    ReceiveMessage(connection);
-        //}
-
-      
-
-        private void ReceiveMessage(object o)
+        private async Task Receive(Socket connection)
         {
-            Socket socket = o as Socket;
-            if(o==null)
+            if (Receive_RichTextBox.InvokeRequired)
             {
+                var d = new listenDelegate(ReceiveMessage);
+                Receive_RichTextBox.Invoke(d, connection);
                 return;
             }
-            while(!_isStop)
+            else
             {
-                byte[] data = new byte[1024*1024*2];
-                int length = -1;
+                await ReceiveMessage(connection);
+            }
+        }
+
+
+
+        private async Task ReceiveMessage(Socket socket)
+        {
+            byte[] data = new byte[1024 * 1024 * 2];
+            int length = -1;
+            while(true)
+            {
+               if(_listentCancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
                 try
                 {
-                    length = socket.Receive(data);
+                    await Task.Run(()=>
+                    {
+                        if (socket==null||!socket.Connected)
+                        {
 
+                            return;
+                        }
+                        length =socket.Receive(data);
+                    });                   
                 }
                 catch(SocketException se)
                 {
@@ -196,35 +196,26 @@ namespace TCPServer
             {
                 MessageBox.Show("发送消息为空");
                 return;
-            }
-            //if (!_isSussessConnected)
-            //{
-            //    MessageBox.Show("未成功连接客户端，无法发送消息");
-            //    return;
-            //}
+            }           
             string message = $"server:\r\n-->   {Send_RichTextBox.Text}\r\n";
             Task.Run(() =>
             {
-                 SendMessage(message);
+                 Send(message);
             });
         }
 
-        //private void Send(string message)
-        //{
-        //    Task.Run(() =>
-        //    {
-        //        if (Receive_RichTextBox.InvokeRequired)
-        //        {
-        //            var d = new SendDelegate(SendMessage);
-        //            Receive_RichTextBox.Invoke(d, new object[] { message });
-        //        }
-        //        else
-        //        {
-        //            SendMessage(message);
-        //        }
-        //        SendMessage(message);
-        //    });
-        //}
+        private void Send(string message)
+        {         
+            if (Receive_RichTextBox.InvokeRequired)
+            {
+                var d = new SendDelegate(SendMessage);
+                Receive_RichTextBox.Invoke(d, new object[] { message });
+            }
+            else
+            {
+                SendMessage(message);
+            }
+        }
 
         /// <summary>
         /// 发送消息
@@ -265,7 +256,7 @@ namespace TCPServer
 
         private void Server_FormClosing(object sender, FormClosingEventArgs e)
         {
-            _isStop = true;
+            //_listenCancellationTokenSource.Cancel();
         }
     }
 }

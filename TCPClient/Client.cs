@@ -22,35 +22,29 @@ namespace TCPClient
 
         private Socket _clientSockect;
 
-        private bool _isStop = false;
-
         private bool _isSussessConnected = false;
 
-        private delegate void SendDelegate(string text);
+        private delegate  void SendDelegate(string text);
 
-        private delegate void ReceiveDelegate();
+        private delegate  Task ReceiveDelegate();
 
         private CancellationToken _listentCancellationToken;
 
         private CancellationTokenSource _listenCancellationTokenSource = new CancellationTokenSource();
-
-        private CancellationToken _sendCancellationToken;
-
-        private CancellationTokenSource _sendCancellationTokenSource = new CancellationTokenSource();
 
         /// <summary>
         /// 连接服务器
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void LinkServer_Button_Click(object sender, EventArgs e)
+        private async void LinkServer_Button_Click(object sender, EventArgs e)
         {
-            if(string.IsNullOrEmpty(ClientIP_TextBox.Text))
+            if (string.IsNullOrEmpty(ClientIP_TextBox.Text))
             {
                 MessageBox.Show("客户端IP为空");
                 return;
             }
-            if(string.IsNullOrEmpty(ClientPort_TextBox.Text))
+            if (string.IsNullOrEmpty(ClientPort_TextBox.Text))
             {
                 MessageBox.Show("客户端端口为空");
                 return;
@@ -60,25 +54,82 @@ namespace TCPClient
             _clientSockect = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             try
             {
-                ShowMessage("client:尝试连接服务器" + "\r\n");
-                _clientSockect.Connect(iPEndPoint);
+                ShowMessage("client:尝试连接服务器" + "\r\n");           
+                await _clientSockect.ConnectAsync(iPEndPoint);
             }
-            catch(SocketException se)
+            catch (SocketException se)
             {
-                ShowMessage("  "+se.Message+"\r\n");
+                ShowMessage("  " + se.Message + "\r\n");
                 Receive_RichTextBox.Text = _receiveContent.ToString();
                 return;
-            }     
+            }
             _isSussessConnected = true;
             LinkServer_Button.Enabled = false;
             Send_Button.Enabled = true;
             _listentCancellationToken = _listenCancellationTokenSource.Token;
-            Task.Run(() =>
+            await Task.Run(async() =>
             {
-                ReceiveMessage();
-            },_listentCancellationToken);
+               await Receive();
+            }, _listentCancellationToken);
             ShowMessage("连接服务器成功" + "\r\n");
-            //Receive();
+        }
+
+        private async Task Receive()
+        {
+            if(Receive_RichTextBox.InvokeRequired)
+            {
+                var d = new ReceiveDelegate(ReceiveMessage);
+                Receive_RichTextBox.BeginInvoke(d);
+            }
+            else
+            {
+                await ReceiveMessage();
+            }
+        }
+
+        private async Task ReceiveMessage()
+        {
+            int length = -1;
+            byte[] data = new byte[1024 * 1024 * 2];
+            while (true)
+            {
+                if (_listentCancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                try
+                {                  
+                    await Task.Run(()=>
+                    {
+                        if (!_clientSockect.Connected)
+                        {
+                            return;
+                        }
+                        length = _clientSockect.Receive(data);
+                    });
+                }
+                catch(SocketException se)
+                {
+                    ShowMessage(se.Message);
+                }
+                catch(ArgumentException ae)
+                {
+                    ShowMessage(ae.Message);
+                }
+                catch(System.Exception e)
+                {
+                    ShowMessage(e.Message);
+                }
+                if (length != -1)
+                {
+                    if (data[0] == 0)
+                    {
+                        string message = Encoding.UTF8.GetString(data, 1, data.Length - 1).Trim().Replace("\0", string.Empty);
+                        ShowMessage(message);
+                    }
+                }
+
+            }
         }
 
         /// <summary>
@@ -86,7 +137,7 @@ namespace TCPClient
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void Send_Button_Click(object sender, EventArgs e)
+        private  void Send_Button_Click(object sender, EventArgs e)
         {
             if(string.IsNullOrEmpty(Send_RichTextBox.Text))
             {
@@ -99,11 +150,23 @@ namespace TCPClient
                 return;
             }
             string message = $"client:\r\n-->   {Send_RichTextBox.Text}\r\n";
-            _sendCancellationToken = _sendCancellationTokenSource.Token;
             Task.Run(() =>
             {
+                Send(message);
+            });
+        }
+
+        private void Send(string message)
+        {
+            if(Receive_RichTextBox.InvokeRequired)
+            {
+                var d = new SendDelegate(SendMessage);
+                Receive_RichTextBox.Invoke(d, new object[] { message });
+            }
+            else
+            {
                 SendMessage(message);
-            },_sendCancellationToken);
+            }
         }
 
         /// <summary>
@@ -111,11 +174,7 @@ namespace TCPClient
         /// </summary>
         /// <param name="message"></param>
         private void SendMessage(string message)
-        {
-            if(_sendCancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
+        {       
             byte[] data = Encoding.UTF8.GetBytes(message);
             try
             {
@@ -136,46 +195,7 @@ namespace TCPClient
             }
         }
 
-        /// <summary>
-        /// 取消发送任务
-        /// </summary>
-        private void StopSendTask()
-        {
-            _sendCancellationTokenSource.Cancel();
-        }
-
-        /// <summary>
-        /// 接收消息
-        /// </summary>
-        private void ReceiveMessage()
-        {
-            while(!_isStop)
-            {
-                if(_listentCancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-                byte[] data = new byte[1024 * 1024 * 2];
-                int length = -1;
-                try
-                {
-                    length = _clientSockect.Receive(data);                 
-                }
-                catch(SocketException se)
-                {
-                    ShowMessage(se.Message + "\r\n");
-                }
-                if (length != 0)
-                {
-                    if (data[0] == 0)
-                    {
-                        string message = Encoding.UTF8.GetString(data, 1, data.Length - 1).Trim().Replace("\0", string.Empty);
-                        ShowMessage(message);
-                    }
-                }
-            }
-        }
-
+      
         private void StopListenTask()
         {
             _listenCancellationTokenSource.Cancel();
@@ -189,19 +209,7 @@ namespace TCPClient
 
         private void Client_FormClosing(object sender, FormClosingEventArgs e)
         {
-            _isStop = true;
-            LinkServer_Button.Enabled = true;
-            if(_clientSockect.Connected)
-            {
-                _clientSockect.Close();
-            }
-            _clientSockect?.Dispose();
-        }
-
-        ~Client()
-        {
             StopListenTask();
-            StopSendTask();
         }
 
         private void Client_Load(object sender, EventArgs e)

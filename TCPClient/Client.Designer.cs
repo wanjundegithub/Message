@@ -123,7 +123,6 @@ namespace TCPClient
             this.Controls.Add(this.Send_Button);
             this.Controls.Add(this.Receive_RichTextBox);
             this.Name = "Client";
-            this.Text = "客户端端口";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Client_FormClosing);
             this.Load += new System.EventHandler(this.Client_Load);
             this.ResumeLayout(false);
