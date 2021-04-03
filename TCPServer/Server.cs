@@ -140,32 +140,34 @@ namespace TCPServer
                 }
                 try
                 {
-                    await Task.Run(()=>
+                    if(socket.Connected)
                     {
-                        if (socket==null||!socket.Connected)
+                        await Task.Run(() =>
                         {
-
-                            return;
-                        }
-                        length =socket.Receive(data);
-                    });                   
+                            try
+                            {
+                                length = socket.Receive(data);
+                            }
+                            catch (SocketException se)
+                            {
+                                ExceptionHandle("异常" + se.Message + "\r\n", socket);
+                                return;
+                            }
+                        });
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 catch(SocketException se)
-                {
-                    ShowMessage("异常" + se.Message + "\r\n");
-                    var ipKey = socket.RemoteEndPoint.ToString();
-                    _ipSocketDics.Remove(ipKey);
-                    _ipTaskDics.Remove(ipKey);
-                    IPCollection_listBox.Items.Remove(ipKey);
+                {                  
+                    ExceptionHandle("异常" + se.Message + "\r\n", socket);
                     break;
                 }
                 catch(Exception e)
-                {
-                    ShowMessage("异常" + e.Message + "\r\n");
-                    var ipKey = socket.RemoteEndPoint.ToString();
-                    _ipSocketDics.Remove(ipKey);
-                    _ipTaskDics.Remove(ipKey);
-                    IPCollection_listBox.Items.Remove(ipKey);
+                {                 
+                    ExceptionHandle("异常" + e.Message + "\r\n",socket);
                     break;
                 }
                 if(length!=0)
@@ -177,6 +179,31 @@ namespace TCPServer
                     }
                 }
             }
+        }
+
+        private delegate void ShowDelegate(string message,Socket socket);
+
+        private void ExceptionHandle(string message,Socket socket)
+        {
+           
+            if (Receive_RichTextBox.InvokeRequired)
+            {
+                var d = new ShowDelegate(ExceptionShow);
+                Receive_RichTextBox.Invoke(d, new object[] { message,socket });
+            }
+            else
+            {
+                ExceptionShow(message, socket);
+            }  
+        }
+
+        private void ExceptionShow(string message,Socket socket)
+        {
+            ShowMessage(message);
+            var ipKey = socket.RemoteEndPoint.ToString();
+            _ipSocketDics.Remove(ipKey);
+            _ipTaskDics.Remove(ipKey);
+            IPCollection_listBox.Items.Remove(ipKey);            
         }
 
         private void ShowMessage(string message)
@@ -254,9 +281,5 @@ namespace TCPServer
             Send_Button.Enabled = false;
         }
 
-        private void Server_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            //_listenCancellationTokenSource.Cancel();
-        }
     }
 }

@@ -14,7 +14,7 @@ namespace TCPClient
         public Client()
         {
             InitializeComponent();
-            //RichTextBox.CheckForIllegalCrossThreadCalls = false;
+            Send_Button.Enabled = false;
         }
 
 
@@ -98,27 +98,44 @@ namespace TCPClient
                     return;
                 }
                 try
-                {                  
-                    await Task.Run(()=>
+                {
+                    if (_clientSockect.Connected)
                     {
-                        if (!_clientSockect.Connected)
+                        await Task.Run(() =>
                         {
-                            return;
-                        }
-                        length = _clientSockect.Receive(data);
-                    });
+                            if (!_clientSockect.Connected)
+                            {
+                                return;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    length = _clientSockect.Receive(data);
+                                }
+                                catch(SocketException e)
+                                {
+                                    ExceptionHandle("异常" + e.Message + "\r\n");
+                                }
+                            }
+                        });
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
-                catch(SocketException se)
+                catch(SocketException e)
                 {
-                    ShowMessage(se.Message);
+                    ExceptionHandle("异常" + e.Message + "\r\n");
                 }
-                catch(ArgumentException ae)
+                catch(ArgumentException e)
                 {
-                    ShowMessage(ae.Message);
+                    ExceptionHandle("异常" + e.Message + "\r\n");
                 }
                 catch(System.Exception e)
                 {
-                    ShowMessage(e.Message);
+                    ExceptionHandle("异常" + e.Message + "\r\n");
                 }
                 if (length != -1)
                 {
@@ -130,6 +147,26 @@ namespace TCPClient
                 }
 
             }
+        }
+
+        private delegate void ShowDelegate(string message);
+
+        private void ExceptionHandle(string message)
+        {
+            if (Receive_RichTextBox.InvokeRequired)
+            {
+                var d = new ShowDelegate(ExceptionShow);
+                Receive_RichTextBox.Invoke(d, new object[] { message });
+            }
+            else
+            {
+                ExceptionShow(message);
+            }
+        }
+
+        private void ExceptionShow(string message)
+        {
+            ShowMessage(message);
         }
 
         /// <summary>
@@ -210,11 +247,6 @@ namespace TCPClient
         private void Client_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopListenTask();
-        }
-
-        private void Client_Load(object sender, EventArgs e)
-        {
-            Send_Button.Enabled = false;
         }
     }
 }

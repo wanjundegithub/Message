@@ -146,7 +146,6 @@ namespace TCPServer
             this.Controls.Add(this.Receive_RichTextBox);
             this.Name = "Server";
             this.Text = "服务器端";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Server_FormClosing);
             this.Load += new System.EventHandler(this.Server_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
