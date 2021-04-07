@@ -33,7 +33,7 @@ namespace TCPServer
 
         private StringBuffer _receiveContent = new StringBuffer();
 
-        private delegate void SendDelegate(string text);
+        private delegate Task SendDelegate(string text);
 
         private CancellationToken _listentCancellationToken;
 
@@ -70,9 +70,9 @@ namespace TCPServer
             _watchSocket.Listen(10);
             Send_Button.Enabled = true;
             _listentCancellationToken = _listenCancellationTokenSource.Token;
-            Task.Run(()=>
+            Task.Run(async()=>
             {
-                Listen();
+                await Listen();
             },_listentCancellationToken);
             ShowMessage("启动服务器成功\r\n");
             StartServer_Button.Enabled = false;
@@ -217,38 +217,22 @@ namespace TCPServer
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void Send_Button_Click(object sender, EventArgs e)
+        private async void Send_Button_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(Send_RichTextBox.Text))
             {
                 MessageBox.Show("发送消息为空");
                 return;
             }           
-            string message = $"server:\r\n-->   {Send_RichTextBox.Text}\r\n";
-            Task.Run(() =>
-            {
-                 Send(message);
-            });
-        }
-
-        private void Send(string message)
-        {         
-            if (Receive_RichTextBox.InvokeRequired)
-            {
-                var d = new SendDelegate(SendMessage);
-                Receive_RichTextBox.Invoke(d, new object[] { message });
-            }
-            else
-            {
-                SendMessage(message);
-            }
+            string message = $"server:\r\n-->   {Send_RichTextBox.Text}\r\n";     
+            await SendMessage(message);
         }
 
         /// <summary>
         /// 发送消息
         /// </summary>
         /// <param name="message"></param>
-        private void SendMessage(string message)
+        private  async Task SendMessage(string message)
         {
             byte[] data = Encoding.UTF8.GetBytes(message);
             try
@@ -264,7 +248,10 @@ namespace TCPServer
                 }
                 string selectItem = IPCollection_listBox.SelectedItem.ToString();
                 Socket socket = _ipSocketDics[selectItem];
-                socket.Send(sendMessage);
+                await Task.Run(()=>
+                {
+                    socket.Send(sendMessage);
+                });             
                 ShowMessage(message);
             }
             catch (SocketException se)

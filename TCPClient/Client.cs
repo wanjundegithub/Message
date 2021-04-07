@@ -24,8 +24,6 @@ namespace TCPClient
 
         private bool _isSussessConnected = false;
 
-        private delegate  void SendDelegate(string text);
-
         private delegate  Task ReceiveDelegate();
 
         private CancellationToken _listentCancellationToken;
@@ -88,11 +86,11 @@ namespace TCPClient
         }
 
         private async Task ReceiveMessage()
-        {
-            int length = -1;
-            byte[] data = new byte[1024 * 1024 * 2];
+        {          
             while (true)
             {
+                int length = -1;
+                byte[] data = new byte[1024 * 1024 * 2];
                 if (_listentCancellationToken.IsCancellationRequested)
                 {
                     return;
@@ -174,7 +172,7 @@ namespace TCPClient
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private  void Send_Button_Click(object sender, EventArgs e)
+        private async void Send_Button_Click(object sender, EventArgs e)
         {
             if(string.IsNullOrEmpty(Send_RichTextBox.Text))
             {
@@ -187,30 +185,14 @@ namespace TCPClient
                 return;
             }
             string message = $"client:\r\n-->   {Send_RichTextBox.Text}\r\n";
-            Task.Run(() =>
-            {
-                Send(message);
-            });
-        }
-
-        private void Send(string message)
-        {
-            if(Receive_RichTextBox.InvokeRequired)
-            {
-                var d = new SendDelegate(SendMessage);
-                Receive_RichTextBox.Invoke(d, new object[] { message });
-            }
-            else
-            {
-                SendMessage(message);
-            }
+            await SendMessage(message);
         }
 
         /// <summary>
         /// 发送消息
         /// </summary>
         /// <param name="message"></param>
-        private void SendMessage(string message)
+        private async Task SendMessage(string message)
         {       
             byte[] data = Encoding.UTF8.GetBytes(message);
             try
@@ -219,19 +201,21 @@ namespace TCPClient
                 // 用来表示发送的是消息数据
                 sendMessage[0] = 0;
                 Buffer.BlockCopy(data, 0, sendMessage, 1, data.Length);
-                _clientSockect.Send(sendMessage);
+                await Task.Run(()=>
+                {
+                    _clientSockect.Send(sendMessage);
+                });
                 ShowMessage(message);
             }
             catch(SocketException se)
             {
-                ShowMessage("发送失败");
+                ShowMessage("发送失败:"+se.Message);
             }
             finally
             {
                 Send_RichTextBox.Text = string.Empty;
             }
         }
-
       
         private void StopListenTask()
         {
